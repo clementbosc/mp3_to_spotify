@@ -37,7 +37,7 @@ def callback():
 		return 'ERREUR GETTING TOKEN'
 
 	token = r.json()['access_token']
-	return redirect('/test?token=' + token)
+	return redirect('/add_songs?token=' + token)
 
 
 def clean_song(name):
@@ -54,6 +54,13 @@ def clean_song(name):
 	name = name.replace(' feat. ', ' ')
 	name = name.replace(',', '')
 	name = name.replace(' x ', ' ')
+	name = name.replace('lyrics', '')
+	name = name.replace('video', ' ')
+	name = name.replace('audio only', '')
+	name = name.replace('radio edit', '')
+	name = name.replace('audio', '')
+	name = name.replace('hq', '')
+	name = name.replace('hd', '')
 
 	return name
 
