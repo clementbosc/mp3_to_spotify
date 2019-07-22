@@ -17,3 +17,5 @@ python mp3_to_spotify.py -d <path to music directory>
 ```
 
 Every improvements are welcome 👍
+
+![](screencapture.png)
