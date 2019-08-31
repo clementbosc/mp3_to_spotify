@@ -13,6 +13,9 @@ import re
 import json
 import webbrowser
 import click
+from pick import pick
+import spotipy
+import spotipy.util as util
 
 CLIENT_SECRET = '1472c5382d674be6ae04a35e83464b35'
 CLIENT_ID = 'be3478ead1a24f51b2245cd13411a77f'
@@ -45,18 +48,34 @@ def clean_song(name):
 
 
 def read_songs(path):
+	click.echo('read songs')
+	click.echo(path)
 	for root, dirs, files in os.walk(path):
+		click.echo(files)
 		for name in files:
 			if name.split('.')[-1] != 'mp3':
+				click.echo('none mp3')
 				continue
 
 			track_path = os.path.join(root, name)
 			f = mutagen.File(track_path)
 
-			if not f['TPE1'].text[0] or not f['TIT2'].text[0]:
+			if not f:
 				query = clean_song(name.replace('.mp3', ''))
+				click.echo("not metadata")
+			
 			else:
-				query = "%s %s" % (f['TPE1'].text[0], f['TIT2'].text[0])
+				click.echo(f)
+				if 'TPE1' or 'TIT2' not in f:
+					click.echo("metadata not empty")
+
+					query = clean_song(name.replace('.mp3', ''))
+				else:
+					click.echo("metadata TPE1")
+
+					query = "%s %s" % (f['TPE1'].text[0], f['TIT2'].text[0])
+
+			click.echo('query'+query)
 
 			yield re.sub(r'(.*)(\(.+\))(.*)', r'\1 \3', query)
 
@@ -77,13 +96,14 @@ def get_spotify_id(token, name):
 
 
 def get_spotify_ids(token, path):
+	click.echo('debut lecture')
 	for track in tqdm(list(read_songs(path))):
 		id = get_spotify_id(token, track)
 		if id is not None:
 			yield id, None
 		else:
 			yield None, track
-			# print('NOT FOUND', track)
+			print('NOT FOUND', track)
 
 
 @click.command()
@@ -100,7 +120,7 @@ def process(directory):
 	state = sha1(str(random()).encode('utf-8')).hexdigest()
 
 	# 1. Authorize spotify access
-	authorize_url = "https://accounts.spotify.com/authorize?client_id=%s&response_type=code&redirect_uri=%s&scope=user-library-read user-library-modify&state=%s" % (
+	authorize_url = "https://accounts.spotify.com/authorize?client_id=%s&response_type=code&redirect_uri=%s&scope=user-library-read playlist-modify-public playlist-modify-private&state=%s" % (
 		CLIENT_ID, REDIRECT_URI, state)
 
 	click.echo('Visit this URL in your browser: ' + authorize_url)
@@ -131,33 +151,45 @@ def process(directory):
 
 	token = r.json()['access_token']
 
-	# 3. Getting the tracks id from spotify
+	# 3. Accessing playlists user et prompt to chose one
+	title = 'Wich playlist do you want to add tracks ?'
+	
+	sp = spotipy.Spotify(auth=token)
+	sp.trace=False
+	playlists = sp.current_user_playlists(limit=50)
+	playlists_name = []
+
+	for playlist in playlists['items']:
+			playlists_name.append(playlist['name'])
+
+	option, index = pick(playlists_name, title)
+	
+	click.echo("id de la playlist")
+	click.echo(playlists['items'][index])
+			
+	# 4. Getting the tracks id from spotify
 	click.echo("➡️  Retrieving the tracks id from Spotify")
+	
 	all_tracks = list(get_spotify_ids(token, path))
+
 	tracks_to_add = list(filter(lambda x: x is not None, [x[0] for x in all_tracks]))
 	not_found_tracks = list(filter(lambda x: x is not None, [x[1] for x in all_tracks]))
 
-	click.echo("")
-
+	user_current = sp.current_user()
+	
 	if len(tracks_to_add) == 0:
 		raise Exception('no tracks to add')
 
-	# 4. Adding song to library by chunk of 50 (API limit)
-	click.echo("➡️  Adding found tracks to Spotify library")
-	for part in tqdm([tracks_to_add[x:x + 50] for x in range(0, len(tracks_to_add), 50)]):
-		r = requests.put(url='https://api.spotify.com/v1/me/tracks',
-						 data=json.dumps({'ids': part}),
-						 headers={
-							 'Content-Type': 'application/json',
-							 'Authorization': 'Bearer %s' % token})
+	# 5. Adding song to library by chunk of 50 (API limit)
+	r=sp.user_playlist_add_tracks(user_current['id'], playlists['items'][index]['id'], tracks_to_add, position=None)
+	
+	click.echo("➡️  Adding found tracks to Spotify playlist")
+	
+	#if r.status_code != 200:
+	if 'snapshot_id' not in r :
+		raise Exception('Error adding tracks to playlist')
 
-		if r.status_code != 200:
-			raise Exception('Error adding tracks to library')
-
-	click.echo()
 	click.echo("✅ %d tracks successfully added to your Spotify account 👏" % (len(tracks_to_add)))
-
-	click.echo()
 
 	if len(not_found_tracks) > 0:
 		click.echo("❌ %d/%d tracks not found on Spotify, try adding manually : %a" % (len(not_found_tracks), len(all_tracks), not_found_tracks))
