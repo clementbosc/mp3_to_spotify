@@ -6,6 +6,7 @@ idna==2.8
 macholib==1.11
 mutagen==1.42.0
 PyInstaller==3.5
-requests==2.22.0
 tqdm==4.32.2
-urllib3==1.25.3
+urllib3==1.24.2
+spotipy==2.4.4
+pick==0.6.4
