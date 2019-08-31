@@ -68,14 +68,10 @@ def read_songs(path):
 				click.echo(f)
 				if 'TPE1' or 'TIT2' not in f:
 					click.echo("metadata not empty")
-
 					query = clean_song(name.replace('.mp3', ''))
 				else:
 					click.echo("metadata TPE1")
-
 					query = "%s %s" % (f['TPE1'].text[0], f['TIT2'].text[0])
-
-			click.echo('query'+query)
 
 			yield re.sub(r'(.*)(\(.+\))(.*)', r'\1 \3', query)
 
